@@ -3087,7 +3087,7 @@
             drawFloatingTexts();
             if (state === "ready") drawOverlay("FLAPPY BIRD", "Sẵn sàng né cột chưa?");
             else if (state === "paused") drawOverlay("⏸ ĐÃ TẠM DỪNG", "Bấm ▶ TIẾP TỤC để chơi tiếp");
-            else if (state === "over") drawOverlay("TOANG RỒI!", "Điểm của mày: " + score)
+            else if (state === "over") drawOverlay("TOANG RỒI!", "Điểm của bạn: " + score)
         }
 
         let lastTime = 0, accumulator = 0; const STEP = 1000 / 60;
