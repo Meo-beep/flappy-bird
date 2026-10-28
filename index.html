@@ -990,7 +990,7 @@
         <div class="game-version" id="gameVersion">v1.0.0</div>
         <div id="menuMain">
         <div class="tag" id="menuMode">☀️ CHỌN CHIM & MAP TRƯỚC KHI CHƠI</div>
-        <p class="menu-best">🏆 Kỷ lục của mày: <b id="menuBest">0</b></p>
+        <p class="menu-best">🏆 Kỷ lục của bạn: <b id="menuBest">0</b></p>
 
         <section class="bird-select" aria-label="Chọn chim">
             <h2>🐤 CHỌN CHIM</h2>
@@ -1152,7 +1152,7 @@
             <button id="backToMenuBtn" type="button">⚙️ ĐỔI CHIM & MAP</button>
         </div>
         <div class="tip">Bấm / chạm / nhấn SPACE để bay lên</div>
-        <div class="help"><b>🎁 Vật phẩm chiến thuật</b><br>🍎 Táo — bất tử 5s<br>🍗 Đùi gà — thu nhỏ 8s<br>🧲 Nam châm — hút vật phẩm<br>🐌 Chậm — giảm tốc<br>🧭 La Bàn — dự báo vị trí cột tiếp theo</div>
+        <div class="help"><b>🎁 Vật phẩm chiến thuật</b><br>🍎 Táo — bất tử 5s<br>🍗 Đùi gà — thu nhỏ 8s<br>🧲 Nam châm — hút vật phẩm<br>🐌 Chậm — giảm tốc</div>
     </div>
 
 
@@ -1180,8 +1180,8 @@
     <div id="playerSetupModal" role="dialog" aria-modal="true" aria-labelledby="playerSetupTitle">
         <div class="modal-card player-setup-card">
             <h2 id="playerSetupTitle">👤 TÊN NGƯỜI CHƠI</h2>
-            <p id="playerSetupHint">Nhập tên của mày. Tên này sẽ được dùng cho BXH và tự động lưu điểm.</p>
-            <input id="playerSetupInput" type="text" maxlength="12" placeholder="Tên của mày..." autocomplete="nickname">
+            <p id="playerSetupHint">Nhập tên của bạn. Tên này sẽ được dùng cho BXH và tự động lưu điểm.</p>
+            <input id="playerSetupInput" type="text" maxlength="12" placeholder="Tên của bạn..." autocomplete="nickname">
             <button id="playerSetupConfirm" type="button">✅ XÁC NHẬN TÊN</button>
             <button id="playerSetupCancel" type="button">QUAY LẠI</button>
             <p id="playerSetupStatus" style="font-size:12px"></p>
@@ -1390,14 +1390,14 @@
             { type: "apple", icon: "🍎", label: "BẤT TỬ", duration: 300 },
             { type: "chicken", icon: "🍗", label: "THU NHỎ", duration: 480 },
             { type: "magnet", icon: "🧲", label: "NAM CHÂM", duration: 360 },
-            { type: "slow", icon: "🐌", label: "CHẬM THỜI GIAN", duration: 200 },
-            { type: "compass", icon: "🧭", label: "LA BÀN", duration: 360 }
+            { type: "doubleScore", icon: "💰", label: "X2 ĐIỂM", duration: 300 },
+            { type: "secondLife", icon: "❤️", label: "MẠNG THỨ HAI", duration: 300 }
         ];
         let bird, pipes, pickups, particles, weatherParticles, floatingTexts, feathers;
         let score, frame, state, groundOffset, pipeCount;
         let paused = false;
         let storm, stormFade, lightning, nextLightning, boltPoints;
-        let effects, pickupTimer;
+        let effects, pickupTimer, secondLifeGrace = 0;
 
         // --- KỸ NĂNG 8 CHIM (TỰ ĐỘNG) ---
         let thunderCharges = 0;
@@ -1422,6 +1422,26 @@
         let postBatGraceTimer = 0; // 2.5 giây bay ổn định sau khi thoát map phụ
         let portalEntryFreeze = false; // khóa cột trong lúc chim vào cổng
         let nextPortalScore = FIRST_PORTAL_SCORE;
+
+        // --- BOSS: xuất hiện tại mốc 40 điểm/cột ---
+        const BOSS_TRIGGER_SCORE = 40;
+        const BOSS_MAX_HP = 40;
+        const BOSS_WARNING_DURATION = 150; // 2.5s
+        let bossMode = false;
+        let bossWarningTimer = 0;
+        let bossActive = false;
+        let bossDefeated = false;
+        let bossHp = BOSS_MAX_HP;
+        let bossX = 0, bossY = 220;
+        let bossModeType = 0;
+        let bossMoveTime = 0;
+        let bossShotTimer = 0;
+        let bossShotIndex = 0;
+        let bossBullets = [];
+        let playerBullets = [];
+        let bossHitFlash = 0;
+        let bossExplosionTimer = 0;
+        let bossExplosionParticles = [];
 
         const TEST_ALL_BIRDS = false; // Bản chính: mở khóa chim theo đúng điều kiện
         const birdDefs = {
@@ -1973,9 +1993,11 @@
         function reset() {
             bird = { x: 85, y: 230, vy: 0 }; pipes = []; pickups = []; particles = []; floatingTexts = []; feathers = []; bats = [];
             weatherParticles = Array.from({ length: 55 }, () => makeWeatherParticle());
-            score = 0; frame = 0; state = "ready"; paused = false; groundOffset = 0; pipeCount = 0; storm = false; stormFade = 0; lightning = 0; nextLightning = 160; boltPoints = []; effects = { invincible: 0, tiny: 0, magnet: 0, slow: 0, compass: 0 }; pickupTimer = 200;
-            thunderCharges = 0; thunderPending = 0; galaxyCharges = 0; nightCooldown = 0; nightDodgeGrace = 0; goldenShield = 0; goldenSaveGrace = 0; goldenCooldown = 1800; galaxySlowTimer = 0;
+            score = 0; frame = 0; state = "ready"; paused = false; groundOffset = 0; pipeCount = 0; storm = false; stormFade = 0; lightning = 0; nextLightning = 160; boltPoints = []; effects = { invincible: 0, tiny: 0, magnet: 0, doubleScore: 0, secondLife: 0 }; pickupTimer = 200;
+            secondLifeGrace = 0; thunderCharges = 0; thunderPending = 0; galaxyCharges = 0; nightCooldown = 0; nightDodgeGrace = 0; goldenShield = 0; goldenSaveGrace = 0; goldenCooldown = 1800; galaxySlowTimer = 0;
             batMode = false; batTimer = 0; batIntroTimer = 0; portal = null; portalSpawnedFor100 = false; portalCooldown = 0; postBatGraceTimer = 0; portalEntryFreeze = false; nextPortalScore = FIRST_PORTAL_SCORE;
+            bossMode = false; bossWarningTimer = 0; bossActive = false; bossDefeated = false; bossHp = BOSS_MAX_HP; bossX = W + 90; bossY = 220; bossModeType = 0; bossMoveTime = 0; bossShotTimer = 0; bossShotIndex = 0; bossBullets = []; playerBullets = []; bossHitFlash = 0;
+            bossExplosionTimer = 0; bossExplosionParticles = [];
             $("score").textContent = "0"; $("start").textContent = "CHƠI NGAY"; $("pauseBtn").textContent = "⏸"; $("pauseBtn").disabled = true;
             $("mode").textContent = currentMap === "fire" ? "🔥 MAP LỬA" : currentMap === "ice" ? "❄️ MAP BĂNG" : currentMap === "hell" ? "👿 MAP ĐỊA NGỤC" : "☀️ TRỜI NẮNG";
             updateBuffLabel(); refreshSelectionUI();
@@ -2043,7 +2065,7 @@
         }
 
         function addPipe() {
-            if (portalSpawnedFor100 || batMode) return;
+            if (portalSpawnedFor100 || batMode || bossMode) return;
             const hell = currentMap === "hell" ? getHellDifficulty() : null;
             const gap = hell ? hell.gap : 168;
             const margin = 65, maxTop = H - GROUND - gap - margin, top = margin + Math.random() * Math.max(1, maxTop - margin); pipeCount++;
@@ -2100,11 +2122,11 @@
             } else if (rand < 30) {
                 t = pickupTypes.find(item => item.type === "apple");
             } else if (rand < 45) {
-                t = pickupTypes.find(item => item.type === "slow");
+                t = pickupTypes.find(item => item.type === "doubleScore");
             } else if (rand < 60) {
                 t = pickupTypes.find(item => item.type === "magnet");
             } else if (rand < 75) {
-                t = pickupTypes.find(item => item.type === "compass");
+                t = pickupTypes.find(item => item.type === "secondLife");
             } else {
                 return false;
             }
@@ -2128,12 +2150,12 @@
             } else if (p.type === "magnet") {
                 effects.magnet = duration; burst(p.x, p.y, "#bd68ff");
                 addFloatingText("🧲 EXCELLENT!", bird.x, bird.y - 25, "#bd68ff");
-            } else if (p.type === "slow") {
-                effects.slow = duration; burst(p.x, p.y, "#74e6ff");
-                addFloatingText("🐌 XUẤT SẮC!", bird.x, bird.y - 25, "#74e6ff");
-            } else if (p.type === "compass") {
-                effects.compass = duration; burst(p.x, p.y, "#ffcc00");
-                addFloatingText("🧭 EXCELLENT!", bird.x, bird.y - 25, "#ffcc00");
+            } else if (p.type === "doubleScore") {
+                effects.doubleScore = duration; burst(p.x, p.y, "#ffd45c");
+                addFloatingText("💰 X2 ĐIỂM — 5S!", bird.x, bird.y - 25, "#ffe08a");
+            } else if (p.type === "secondLife") {
+                effects.secondLife = duration; burst(p.x, p.y, "#ff6b8a");
+                addFloatingText("❤️ MẠNG THỨ HAI — 5S!", bird.x, bird.y - 25, "#ffb2c2");
             }
         }
 
@@ -2142,8 +2164,8 @@
             if (effects.invincible > 0) active.push("🍎 Bất Tử: " + (effects.invincible / 60).toFixed(1) + "s");
             if (effects.tiny > 0) active.push("🍗 Thu Nhỏ: " + (effects.tiny / 60).toFixed(1) + "s");
             if (effects.magnet > 0) active.push("🧲 Hút: " + (effects.magnet / 60).toFixed(1) + "s");
-            if (effects.slow > 0) active.push("🐌 Chậm: " + (effects.slow / 60).toFixed(1) + "s");
-            if (effects.compass > 0) active.push("🧭 La Bàn: " + (effects.compass / 60).toFixed(1) + "s");
+            if (effects.doubleScore > 0) active.push("💰 X2 Điểm: " + (effects.doubleScore / 60).toFixed(1) + "s");
+            if (effects.secondLife > 0) active.push("❤️ Mạng 2: " + (effects.secondLife / 60).toFixed(1) + "s");
             $("buffStatus").textContent = active.length ? active.join("  |  ") : "✨ Sẵn sàng nhặt buff!";
         }
 
@@ -2365,29 +2387,6 @@
             ctx.font = "bold 11px Arial";
             ctx.textAlign = "center";
             ctx.fillText(`🦇 ĐẤU TRƯỜNG DƠI: ${(batTimer / 60).toFixed(1)}s`, W / 2, y + 12);
-            ctx.restore();
-        }
-
-        function drawCompassGuide() {
-            if (effects.compass <= 0) return;
-            const nextPipe = pipes.find(p => p.x + PIPE_W > bird.x);
-            if (!nextPipe) return;
-
-            const targetY = nextPipe.top + nextPipe.gap / 2;
-            ctx.save();
-            ctx.strokeStyle = "rgba(255, 204, 0, 0.75)";
-            ctx.lineWidth = 2.5;
-            ctx.setLineDash([6, 6]);
-            ctx.beginPath();
-            ctx.moveTo(bird.x, bird.y);
-            ctx.lineTo(nextPipe.x, targetY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            ctx.fillStyle = "#ffcc00";
-            ctx.beginPath();
-            ctx.arc(nextPipe.x, targetY, 6, 0, Math.PI * 2);
-            ctx.fill();
             ctx.restore();
         }
 
@@ -2766,14 +2765,483 @@
             ctx.restore();
         }
 
+        function drawSecondLifeEffect() {
+            if (secondLifeGrace <= 0) return;
+            ctx.save();
+            const pulse = 1 + Math.sin(frame * .35) * .08;
+            ctx.strokeStyle = "rgba(255,107,138,.75)";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(bird.x, bird.y, 30 * pulse, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         function drawParticles() { for (const p of particles) { ctx.globalAlpha = Math.max(0, p.life / 24); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill() } ctx.globalAlpha = 1 }
         function drawOverlay(title, subtitle) { ctx.fillStyle = "rgba(24,24,50,.78)"; ctx.fillRect(25, 175, W - 50, 145); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(25, 175, W - 50, 145); ctx.textAlign = "center"; ctx.fillStyle = "#ffe66d"; ctx.font = "bold 25px Arial"; ctx.fillText(title, W / 2, 218); ctx.fillStyle = "#fff"; ctx.font = "15px Arial"; ctx.fillText(subtitle, W / 2, 250); ctx.font = "13px Arial"; ctx.fillText("Chạm màn hình để tiếp tục", W / 2, 280) }
+
+
+        function startBossEncounter() {
+            if (bossMode || bossDefeated || batMode || portalEntryFreeze) return;
+            bossMode = true;
+            bossActive = false;
+            bossWarningTimer = BOSS_WARNING_DURATION;
+            bossHp = BOSS_MAX_HP;
+            bossX = W + 95;
+            bossY = H / 2 - 35;
+            bossMoveTime = 0;
+            bossShotTimer = 45;
+            bossShotIndex = 0;
+            bossBullets = [];
+            playerBullets = [];
+            pipes = [];
+            pickups = [];
+            portal = null;
+            portalEntryFreeze = false;
+            $("mode").textContent = "⚠️ CẢNH BÁO BOSS...";
+            addFloatingText("⚠️ CẢNH BÁO BOSS!", W / 2, 135, "#ff4058");
+            playMilestoneSound();
+        }
+
+        function fireBossAuto() {
+            if (!bossActive || bossWarningTimer > 0) return;
+            playerBullets.push({
+                x: bird.x + 24,
+                y: bird.y,
+                vx: 7.5,
+                life: 120
+            });
+        }
+
+        function spawnBossBullet() {
+            // Đạn Boss đi thẳng ngang sang trái giống đạn của chim.
+            bossBullets.push({
+                x: bossX - 38,
+                y: bossY,
+                vx: -3.2, // Giảm nhẹ tốc độ đạn Boss để dễ né hơn
+                vy: 0,
+                life: 180
+            });
+            bossShotIndex++;
+        }
+
+        function updateBoss() {
+            if (!bossMode) return;
+
+            if (bossWarningTimer > 0) {
+                bossWarningTimer--;
+                bossActive = false;
+                bossX = W + 95;
+                bossY = H / 2 - 35;
+                bossBullets = [];
+                playerBullets = [];
+                bird.vy *= 0.92;
+                bird.y += bird.vy * 0.35;
+                bird.y = Math.max(55, Math.min(H - GROUND - 55, bird.y));
+
+                if (bossWarningTimer === 0) {
+                    bossActive = true;
+                    bossX = W - 88;
+                    bossY = H / 2 - 35;
+                    bossMoveTime = 0;
+                    bossShotTimer = 38;
+                    $("mode").textContent = "👹 BOSS — HẠ GỤC NÓ!";
+                    addFloatingText("👹 BOSS XUẤT HIỆN!", W / 2, 135, "#ff6b7a");
+                    playMilestoneSound();
+                }
+                return;
+            }
+
+            if (!bossActive) return;
+
+            bossMoveTime++;
+            bossHitFlash = Math.max(0, bossHitFlash - 1);
+
+            // Boss chỉ có 1 chế độ: di chuyển lên/xuống mượt theo chiều dọc.
+            bossY = H / 2 - 35 + Math.sin(bossMoveTime * 0.022) * 100;
+            bossY = Math.max(75, Math.min(H - GROUND - 95, bossY));
+
+            // Chim tự động bắn.
+            if (bossShotTimer > 0) bossShotTimer--;
+            if (bossShotTimer <= 0) {
+                fireBossAuto();
+                bossShotTimer = 13;
+            }
+
+            // Boss bắn trả.
+            if (bossShotIndex % 3 === 0) {
+                // Không bắn thêm ngay; chỉ dùng bộ đếm chung bên dưới.
+            }
+            if (frame % 48 === 0) spawnBossBullet();
+
+            for (const b of playerBullets) {
+                b.x += b.vx;
+                b.life--;
+            }
+            playerBullets = playerBullets.filter(b => b.life > 0 && b.x < W + 40);
+
+            for (const b of bossBullets) {
+                b.x += b.vx;
+                b.y += b.vy;
+                b.life--;
+            }
+            bossBullets = bossBullets.filter(b => b.life > 0 && b.x > -40 && b.y > -40 && b.y < H + 40);
+
+            // Đạn chim trúng boss.
+            for (const pb of playerBullets) {
+                if (Math.hypot(pb.x - bossX, pb.y - bossY) < 48) {
+                    pb.life = 0;
+                    bossHp--;
+                    bossHitFlash = 8;
+                    burst(pb.x, pb.y, "#ffe66d");
+                    if (bossHp <= 0) {
+                        bossHp = 0;
+                        bossActive = false;
+                        bossDefeated = true;
+                        bossMode = false;
+                        startBossExplosion();
+                        bossBullets = [];
+                        playerBullets = [];
+                        score += 10;
+                        $("score").textContent = score;
+                        achievementStats.bestScore = Math.max(Number(achievementStats.bestScore) || 0, score);
+                        refreshMapUnlocks();
+                        checkAchievements();
+                        addFloatingText("🏆 BOSS BỊ HẠ! +10 ĐIỂM", W / 2, 145, "#ffe66d");
+                        burst(bossX, bossY, "#ffe66d");
+                        burst(bossX + 15, bossY - 20, "#ff6b6b");
+                        burst(bossX - 15, bossY + 20, "#74e6ff");
+                        playMilestoneSound();
+                        pipeCount = 0;
+                        pipes = [];
+                        pickups = [];
+                        portalCooldown = 120;
+                        $("mode").textContent = currentMap === "fire" ? "🔥 MAP LỬA" : currentMap === "ice" ? "❄️ MAP BĂNG" : currentMap === "hell" ? "👿 MAP ĐỊA NGỤC" : "☀️ TRỜI NẮNG";
+                    }
+                }
+            }
+
+            // Đạn boss trúng chim.
+            if (bossActive && effects.invincible <= 0 && secondLifeGrace <= 0 && goldenSaveGrace <= 0 && nightDodgeGrace <= 0) {
+                const size = (effects.tiny > 0 ? BIRD_SIZE * .6 : BIRD_SIZE) * birdDefs[selectedBird].scale;
+                const r = size * 0.36 + 5;
+                for (const bb of bossBullets) {
+                    if (Math.hypot(bb.x - bird.x, bb.y - bird.y) < r + 5) {
+                        bb.life = 0;
+                        if (effects.secondLife > 0) {
+                            effects.secondLife = 0;
+                            secondLifeGrace = 90;
+                            bird.vy = 0;
+                            burst(bird.x, bird.y, "#ff6b8a");
+                            addFloatingText("❤️ MẠNG THỨ HAI!", bird.x, bird.y - 28, "#ffb2c2");
+                            updateBuffLabel();
+                        } else if (selectedBird === "night" && nightCooldown <= 0) {
+                            saveFromCollision("night");
+                        } else {
+                            endGame();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        function startBossExplosion() {
+            bossExplosionTimer = 42;
+            bossExplosionParticles = [];
+            for (let i = 0; i < 34; i++) {
+                const a = Math.random() * Math.PI * 2;
+                const speed = 1.8 + Math.random() * 5.2;
+                bossExplosionParticles.push({
+                    x: bossX,
+                    y: bossY,
+                    vx: Math.cos(a) * speed,
+                    vy: Math.sin(a) * speed,
+                    r: 2 + Math.random() * 6,
+                    life: 24 + Math.floor(Math.random() * 18),
+                    maxLife: 42
+                });
+            }
+        }
+
+        function updateBossExplosion() {
+            if (bossExplosionTimer <= 0) return;
+            bossExplosionTimer--;
+            for (const p of bossExplosionParticles) {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vx *= 0.965;
+                p.vy *= 0.965;
+                p.life--;
+            }
+            bossExplosionParticles = bossExplosionParticles.filter(p => p.life > 0);
+        }
+
+        function drawBossExplosion() {
+            if (bossExplosionTimer <= 0) return;
+
+            const progress = 1 - bossExplosionTimer / 42;
+            ctx.save();
+
+            // Flash + expanding shockwave.
+            if (bossExplosionTimer > 30) {
+                ctx.globalAlpha = (bossExplosionTimer - 30) / 10 * 0.45;
+                ctx.fillStyle = "#fff4a8";
+                ctx.fillRect(0, 0, W, H);
+            }
+
+            ctx.globalAlpha = Math.max(0, 1 - progress * 0.75);
+            ctx.strokeStyle = "#ffe66d";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(bossX, bossY, 18 + progress * 105, 0, Math.PI * 2);
+            ctx.stroke();
+
+            for (const p of bossExplosionParticles) {
+                ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+                ctx.fillStyle = p.life % 3 === 0 ? "#fff3a6" : (p.life % 2 ? "#ff4f72" : "#74e6ff");
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.shadowBlur = 12;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r * (0.7 + progress * 0.45), 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#ffe66d";
+            ctx.font = "bold 18px Arial";
+            ctx.fillText("💥 BOSS BỊ HẠ!", bossX, bossY - 95 - progress * 12);
+
+            ctx.restore();
+        }
+
+        function drawBoss() {
+            if (!bossMode) return;
+
+            const warning = bossWarningTimer > 0;
+            const pulse = 1 + Math.sin(frame * 0.10) * 0.025;
+            const scale = 0.62;
+
+            ctx.save();
+            ctx.translate(bossX, bossY);
+            ctx.scale(pulse * scale, pulse * scale);
+
+            if (warning) {
+                ctx.globalAlpha = Math.max(0.25, 1 - bossWarningTimer / BOSS_WARNING_DURATION);
+            }
+
+            // === BOSS DƠI KHỔNG LỒ ===
+            // Cánh trái.
+            ctx.fillStyle = "#26113f";
+            ctx.strokeStyle = "#ff4f72";
+            ctx.lineWidth = 3.5;
+            ctx.beginPath();
+            ctx.moveTo(-24, -8);
+            ctx.bezierCurveTo(-65, -48, -112, -78, -145, -58);
+            ctx.bezierCurveTo(-126, -35, -112, -12, -91, 5);
+            ctx.bezierCurveTo(-112, 4, -132, 13, -143, 30);
+            ctx.bezierCurveTo(-115, 32, -91, 28, -68, 18);
+            ctx.bezierCurveTo(-86, 34, -94, 48, -98, 65);
+            ctx.bezierCurveTo(-66, 54, -42, 37, -20, 18);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Cánh phải.
+            ctx.beginPath();
+            ctx.moveTo(24, -8);
+            ctx.bezierCurveTo(65, -48, 112, -78, 145, -58);
+            ctx.bezierCurveTo(126, -35, 112, -12, 91, 5);
+            ctx.bezierCurveTo(112, 4, 132, 13, 143, 30);
+            ctx.bezierCurveTo(115, 32, 91, 28, 68, 18);
+            ctx.bezierCurveTo(86, 34, 94, 48, 98, 65);
+            ctx.bezierCurveTo(66, 54, 42, 37, 20, 18);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Màng cánh.
+            ctx.globalAlpha *= 0.65;
+            ctx.fillStyle = "#6b2a9d";
+            ctx.beginPath();
+            ctx.moveTo(-25, -4);
+            ctx.lineTo(-112, -45);
+            ctx.lineTo(-91, 3);
+            ctx.lineTo(-120, 22);
+            ctx.lineTo(-65, 15);
+            ctx.lineTo(-88, 50);
+            ctx.lineTo(-25, 18);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(25, -4);
+            ctx.lineTo(112, -45);
+            ctx.lineTo(91, 3);
+            ctx.lineTo(120, 22);
+            ctx.lineTo(65, 15);
+            ctx.lineTo(88, 50);
+            ctx.lineTo(25, 18);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = warning ? Math.max(0.25, 1 - bossWarningTimer / BOSS_WARNING_DURATION) : 1;
+
+            // Đầu/thân dơi lớn.
+            const bodyGrad = ctx.createRadialGradient(-8, -10, 5, 0, 0, 58);
+            bodyGrad.addColorStop(0, "#8b4bd0");
+            bodyGrad.addColorStop(0.55, "#47206f");
+            bodyGrad.addColorStop(1, "#171126");
+            ctx.fillStyle = bodyGrad;
+            ctx.strokeStyle = "#ffd166";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 56, 62, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Tai.
+            ctx.fillStyle = "#3a185b";
+            ctx.strokeStyle = "#ff4f72";
+            ctx.beginPath();
+            ctx.moveTo(-42, -38);
+            ctx.lineTo(-54, -78);
+            ctx.lineTo(-19, -55);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(42, -38);
+            ctx.lineTo(54, -78);
+            ctx.lineTo(19, -55);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Mắt.
+            const eyeGlow = bossHitFlash > 0 ? "#ffffff" : "#ff365a";
+            ctx.shadowColor = eyeGlow;
+            ctx.shadowBlur = 14;
+            ctx.fillStyle = eyeGlow;
+            ctx.beginPath();
+            ctx.ellipse(-19, -12, 12, 9, -0.2, 0, Math.PI * 2);
+            ctx.ellipse(19, -12, 12, 9, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Miệng/fang.
+            ctx.fillStyle = "#120d20";
+            ctx.beginPath();
+            ctx.ellipse(0, 22, 23, 13, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.moveTo(-13, 18); ctx.lineTo(-8, 34); ctx.lineTo(-3, 20);
+            ctx.moveTo(13, 18); ctx.lineTo(8, 34); ctx.lineTo(3, 20);
+            ctx.fill();
+
+            // Lõi năng lượng.
+            ctx.fillStyle = "#ffe66d";
+            ctx.shadowColor = "#ffe66d";
+            ctx.shadowBlur = 16;
+            ctx.beginPath();
+            ctx.arc(0, -35, 9 + Math.sin(frame * 0.15) * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+
+            // HP / cảnh báo.
+            if (warning) {
+                ctx.save();
+                const blinkOn = Math.floor(bossWarningTimer / 9) % 2 === 0;
+                ctx.fillStyle = blinkOn ? "rgba(255,35,70,.14)" : "rgba(255,255,255,.025)";
+                ctx.fillRect(0, 0, W, H);
+                ctx.textAlign = "center";
+                ctx.fillStyle = blinkOn ? "#ff4058" : "#fff";
+                ctx.font = "bold 25px Arial";
+                ctx.fillText("⚠️ CẢNH BÁO BOSS ⚠️", W / 2, H / 2 - 32);
+                ctx.font = "bold 14px Arial";
+                ctx.fillText("Chuẩn bị! Chim sẽ tự động khai hỏa.", W / 2, H / 2 + 2);
+                ctx.restore();
+            } else {
+                const barW = 220, barH = 15, x = (W - barW) / 2, y = 28;
+                ctx.save();
+                ctx.fillStyle = "rgba(0,0,0,.62)";
+                ctx.fillRect(x - 2, y - 2, barW + 4, barH + 4);
+                ctx.fillStyle = "#ff4058";
+                ctx.fillRect(x, y, barW * (bossHp / BOSS_MAX_HP), barH);
+                ctx.strokeStyle = "#ffe66d";
+                ctx.strokeRect(x - 2, y - 2, barW + 4, barH + 4);
+                ctx.fillStyle = "#fff";
+                ctx.textAlign = "center";
+                ctx.font = "bold 11px Arial";
+                ctx.fillText(`👹 DƠI BOSS — HP ${bossHp}/${BOSS_MAX_HP}`, W / 2, y + 12);
+                ctx.restore();
+            }
+        }
+
+        function drawBossProjectiles() {
+            if (!bossMode) return;
+
+            // Đạn của chim: vàng, to và có vệt sáng để nhìn rõ.
+            for (const b of playerBullets) {
+                const tail = 20;
+                ctx.save();
+                ctx.strokeStyle = "rgba(255, 230, 90, .55)";
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(b.x - tail, b.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+
+                ctx.shadowColor = "#fff36d";
+                ctx.shadowBlur = 14;
+                ctx.fillStyle = "#fff3a6";
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 5.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Đạn của boss: đỏ/hồng, có vệt dài và lõi trắng.
+            for (const b of bossBullets) {
+                const speed = Math.hypot(b.vx, b.vy) || 1;
+                const tx = b.x - (b.vx / speed) * 25;
+                const ty = b.y - (b.vy / speed) * 25;
+
+                ctx.save();
+                ctx.strokeStyle = "rgba(255, 55, 95, .65)";
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(tx, ty);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+
+                ctx.shadowColor = "#ff365a";
+                ctx.shadowBlur = 16;
+                ctx.fillStyle = "#ff4f72";
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 7, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = "#fff";
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
 
         function collide() {
             const size = (effects.tiny > 0 ? BIRD_SIZE * .6 : BIRD_SIZE) * birdDefs[selectedBird].scale, r = size * .36;
             if (bird.y - r < 0 || bird.y + r > H - GROUND) return true;
 
-            if (!batMode && !portalEntryFreeze) {
+            if (!batMode && !bossMode && !portalEntryFreeze) {
                 for (const p of pipes) { if (bird.x + r > p.x - 7 && bird.x - r < p.x + PIPE_W + 7) { if (bird.y - r < p.top || bird.y + r > p.top + p.gap) return true } }
             }
 
@@ -2799,11 +3267,24 @@
             autoSyncScoreToLeaderboard(score);
         }
 
-        function updateBuffs() { for (const key of Object.keys(effects)) { if (effects[key] > 0) effects[key]-- } updateBuffLabel() }
+        function updateBuffs() {
+            for (const key of Object.keys(effects)) { if (effects[key] > 0) effects[key]-- }
+            if (secondLifeGrace > 0) secondLifeGrace--;
+            updateBuffLabel();
+        }
 
         function update() {
             frame++;
+            updateBossExplosion();
             if (state === "playing") {
+                if (bossMode) {
+                    updateBoss();
+                    updateBuffs();
+                    updateSkillUI();
+                    updateStorm();
+                    // Không return ở đây: chim vẫn phải chịu trọng lực
+                    // và người chơi vẫn phải bấm để điều khiển trong Boss Fight.
+                }
                 // Khi vừa vào màn dơi, cho chim một khoảng "bay tự do" 2.5s
                 // để người chơi kịp nhấn điều khiển; hết thời gian mới rơi bình thường.
                 // Sau khi thoát map phụ: 2.5 giây bay ổn định, vẫn điều khiển
@@ -2829,7 +3310,7 @@
 
                 const hell = currentMap === "hell" ? getHellDifficulty() : null;
                 const baseSpeed = (2.1 + Math.min(score * .055, 1.5)) * tierSpeed * (hell ? hell.speedMult : 1);
-                const speed = (effects.slow > 0 || galaxySlowTimer > 0) ? baseSpeed * .62 : baseSpeed;
+                const speed = baseSpeed;
                 // Trong 2.5 giây sau khi thoát map dơi: đóng băng toàn bộ map chính.
                 // Chim vẫn bay/điều khiển được, nhưng cột, nền và tiến độ không chạy.
                 if (postBatGraceTimer <= 0) groundOffset += speed;
@@ -2840,6 +3321,7 @@
                     score >= nextPortalScore &&
                     !portalSpawnedFor100 &&
                     !batMode &&
+                    !bossMode &&
                     portalCooldown <= 0
                 ) {
                     portalSpawnedFor100 = true;
@@ -2980,7 +3462,7 @@
                         if (!portalEntryFreeze && !batMode && postBatGraceTimer <= 0 &&
                             !p.passed && p.x + PIPE_W < bird.x) {
                             p.passed = true;
-                            score++;
+                            score += effects.doubleScore > 0 ? 2 : 1;
                             $("score").textContent = score;
                             achievementStats.totalColumns++;
                             if(!achievementStats.mapColumns[currentMap]) achievementStats.mapColumns[currentMap]=0;
@@ -2994,6 +3476,10 @@
                             refreshMapUnlocks();
                             checkAchievements();
                             registerBirdSkillProgress();
+
+                            if (score >= BOSS_TRIGGER_SCORE && !bossMode && !bossDefeated) {
+                                startBossEncounter();
+                            }
 
                             if (currentMap === "hell" && (score === 10 || score === 50)) {
                                 const label = score === 10 ? "🔥 ĐỊA NGỤC CẤP 2 — CỘT 10!" : "☠️ ĐỊA NGỤC CẤP 3 — CỘT 50!";
@@ -3060,10 +3546,21 @@
                 if (selectedBird === "thunder" && thunderPending > 0) autoUseThunderSkill();
                 updateSkillUI();
                 updateStorm();
-                if (effects.invincible <= 0 && nightDodgeGrace <= 0 && goldenSaveGrace <= 0 && collide()) {
-                    if (selectedBird === "night" && nightCooldown <= 0 && !batMode && !portalEntryFreeze) saveFromCollision("night");
-                    else endGame();
-                } else if ((effects.invincible > 0 || nightDodgeGrace > 0 || goldenSaveGrace > 0) && bird.y + BIRD_SIZE * .3 > H - GROUND) { bird.y = H - GROUND - BIRD_SIZE * .3; bird.vy = Math.min(0, bird.vy) }
+                if (effects.invincible <= 0 && nightDodgeGrace <= 0 && goldenSaveGrace <= 0 && secondLifeGrace <= 0 && collide()) {
+                    if (selectedBird === "night" && nightCooldown <= 0 && !batMode && !portalEntryFreeze) {
+                        saveFromCollision("night");
+                    } else if (effects.secondLife > 0) {
+                        effects.secondLife = 0;
+                        secondLifeGrace = 90;
+                        bird.y = Math.max(45, Math.min(H - GROUND - 45, bird.y));
+                        bird.vy = 0;
+                        burst(bird.x, bird.y, "#ff6b8a");
+                        addFloatingText("❤️ MẠNG THỨ HAI!", bird.x, bird.y - 28, "#ffb2c2");
+                        updateBuffLabel();
+                    } else {
+                        endGame();
+                    }
+                } else if ((effects.invincible > 0 || nightDodgeGrace > 0 || goldenSaveGrace > 0 || secondLifeGrace > 0) && bird.y + BIRD_SIZE * .3 > H - GROUND) { bird.y = H - GROUND - BIRD_SIZE * .3; bird.vy = Math.min(0, bird.vy) }
             } else updateStorm();
         }
 
@@ -3071,16 +3568,19 @@
             drawBackground();
             if (!batMode && !portalEntryFreeze) {
                 for (const p of pipes) drawPipe(p);
-                drawCompassGuide();
                 drawPickups();
             }
             drawPortal();
             drawBats();
+            drawBoss();
             drawGround();
             drawStorm();
             drawParticles();
             drawFeathers();
             drawBird();
+            drawBossProjectiles();
+            drawBossExplosion();
+            drawSecondLifeEffect();
             drawSelectedTitle();
             drawBatWarning();
             drawBossBar();
